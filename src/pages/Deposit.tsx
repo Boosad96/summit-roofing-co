@@ -167,6 +167,7 @@ export default function Deposit() {
   const [config, setConfig] = useState<PublicConfig | null>(null);
   const [planId, setPlanId] = useState(siteConfig.plans.deposit.planId);
   const [checkoutConfigId, setCheckoutConfigId] = useState<string | null>(null);
+  const [checkoutUrl, setCheckoutUrl] = useState<string | null>(null);
   const [checkoutError, setCheckoutError] = useState<string | null>(null);
   const [checkoutResult, setCheckoutResult] = useState<string | null>(null);
   const [email, setEmail] = useState("");
@@ -196,6 +197,7 @@ export default function Deposit() {
       if (cancelled) return;
       if (result.ok && result.data) {
         setCheckoutConfigId(result.data.checkoutConfigurationId);
+        setCheckoutUrl(result.data.purchaseUrl ?? null);
       } else {
         setCheckoutError(result.error ?? "Checkout couldn't be created.");
       }
@@ -268,7 +270,18 @@ export default function Deposit() {
               {checkoutResult}
             </p>
           )}
-          {!config?.demo && checkoutConfigId && (
+          {!config?.demo && checkoutConfigId && checkoutUrl?.includes("sandbox.whop.com") && (
+            <div className="notice" role="status">
+              <strong>Test checkout.</strong> This template is connected to Whop in
+              test mode, so checkout opens on Whop's secure hosted checkout page
+              instead of the embedded element.
+              <br />
+              <a href={checkoutUrl} target="_blank" rel="noreferrer">
+                Continue to secure checkout - {selectedPlan.name} ${selectedPlan.amount}
+              </a>
+            </div>
+          )}
+          {!config?.demo && checkoutConfigId && !checkoutUrl?.includes("sandbox.whop.com") && (
             <WhopElements elements={whopElements}>
               <Checkout
                 checkoutConfiguration={checkoutConfigId}

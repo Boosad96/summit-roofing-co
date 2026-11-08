@@ -37,12 +37,21 @@ export interface WhopEnv {
   apiVersion: string;
 }
 
-export function getWhopEnv(): WhopEnv {
+export function getWhopEnv(bindings?: Record<string, unknown>): WhopEnv {
+  // Read from the Worker's `env` bindings first (that is where the app
+  // secrets and the runtime-injected keys land), then from `process.env`
+  // (local `.env` / `.dev.vars`). `env` may also carry non-string
+  // bindings such as ASSETS -- those are ignored here.
+  const from = (name: string): string | undefined => {
+    const v = bindings?.[name] ?? process.env[name];
+    return typeof v === "string" ? v : undefined;
+  };
   return {
-    apiKey: process.env.WHOP_API_KEY ?? null,
-    accountId: process.env.WHOP_ACCOUNT_ID ?? null,
-    apiBase: process.env.WHOP_API_BASE ?? "https://api.whop.com/api/v1",
-    apiVersion: process.env.WHOP_API_VERSION ?? "2026-10-24",
+    apiKey: from("WHOP_API_KEY_OVERRIDE") ?? from("WHOP_API_KEY") ?? null,
+    accountId:
+      from("WHOP_ACCOUNT_ID_OVERRIDE") ?? from("WHOP_ACCOUNT_ID") ?? null,
+    apiBase: from("WHOP_API_BASE") ?? "https://api.whop.com/api/v1",
+    apiVersion: from("WHOP_API_VERSION") ?? "2026-10-24",
   };
 }
 
@@ -74,7 +83,8 @@ async function whopFetch(
     "Api-Version-Date": env.apiVersion,
     "Content-Type": "application/json",
   };
-  if (options.idempotencyKey) headers["Idempotency-Key"] = options.idempotencyKey;
+  if (options.idempotencyKey)
+    headers["Idempotency-Key"] = options.idempotencyKey;
 
   const res = await fetch(`${env.apiBase}${path}`, {
     method: options.method ?? "GET",
@@ -89,7 +99,9 @@ async function whopFetch(
     parsed = { raw: text };
   }
   if (!res.ok) {
-    throw new Error(`Whop API ${res.status} on ${path}: ${errorMessage(parsed, text || "unknown error")}`);
+    throw new Error(
+      `Whop API ${res.status} on ${path}: ${errorMessage(parsed, text || "unknown error")}`,
+    );
   }
   return { status: res.status, body: parsed };
 }
@@ -100,31 +112,50 @@ const idempotencyKey = () =>
 /** Create a reusable checkout configuration for a plan. */
 export async function createCheckoutConfiguration(
   env: WhopEnv,
-  input: { planId: string; mode: "payment" | "setup"; metadata?: Record<string, string> },
+  input: {
+    planId: string;
+    mode: "payment" | "setup";
+    metadata?: Record<string, string>;
+  },
 ): Promise<{ id: string; purchaseUrl: string | null; planId: string | null }> {
   const { body } = await whopFetch(env, "/checkout_configurations", {
     method: "POST",
     idempotencyKey: idempotencyKey(),
     body: {
       company_id: env.accountId,
-      plan_id: input.planId,
+      // The checkout API refers to a plan as its "variant". Sending plan_id
+      // makes it look up a variant by that value and answer 404.
+      variant_id: input.planId,
       mode: input.mode,
       metadata: input.metadata ?? {},
     },
   });
-  const plan = body.plan as { id?: string } | null;
+  // The configuration answers with the purchased variant under `variant`
+  // (older responses used `plan`).
+  const variant = (body.variant ?? body.plan) as { id?: string } | null;
   return {
     id: String(body.id ?? ""),
-    purchaseUrl: typeof body.purchase_url === "string" ? body.purchase_url : null,
-    planId: plan?.id ?? null,
+    purchaseUrl:
+      typeof body.purchase_url === "string" ? body.purchase_url : null,
+    planId: variant?.id ?? null,
   };
 }
 
 /** Create a setup intent from a browser confirmation token (save card on file). */
 export async function createSetupIntent(
   env: WhopEnv,
-  input: { confirmationToken: string; currency?: string; returnUrl?: string; metadata?: Record<string, string> },
-): Promise<{ id: string; status: string; clientSecret: string | null; paymentMethodId: string | null }> {
+  input: {
+    confirmationToken: string;
+    currency?: string;
+    returnUrl?: string;
+    metadata?: Record<string, string>;
+  },
+): Promise<{
+  id: string;
+  status: string;
+  clientSecret: string | null;
+  paymentMethodId: string | null;
+}> {
   const { body } = await whopFetch(env, "/setup_intents", {
     method: "POST",
     idempotencyKey: idempotencyKey(),
@@ -139,15 +170,23 @@ export async function createSetupIntent(
   return {
     id: String(body.id ?? ""),
     status: String(body.status ?? ""),
-    clientSecret: typeof body.client_secret === "string" ? body.client_secret : null,
-    paymentMethodId: typeof body.payment_method_id === "string" ? body.payment_method_id : null,
+    clientSecret:
+      typeof body.client_secret === "string" ? body.client_secret : null,
+    paymentMethodId:
+      typeof body.payment_method_id === "string"
+        ? body.payment_method_id
+        : null,
   };
 }
 
 /** Charge a buyer from a browser confirmation token (payment-elements flow). */
 export async function createPayment(
   env: WhopEnv,
-  input: { confirmationToken: string; planId: string; metadata?: Record<string, string> },
+  input: {
+    confirmationToken: string;
+    planId: string;
+    metadata?: Record<string, string>;
+  },
 ): Promise<{ id: string; status: string; clientSecret: string | null }> {
   const { body } = await whopFetch(env, "/payments", {
     method: "POST",
@@ -162,20 +201,29 @@ export async function createPayment(
   return {
     id: String(body.id ?? ""),
     status: String(body.status ?? ""),
-    clientSecret: typeof body.client_secret === "string" ? body.client_secret : null,
+    clientSecret:
+      typeof body.client_secret === "string" ? body.client_secret : null,
   };
 }
 
 /** Record a lead (Legacy API). */
 export async function createLead(
   env: WhopEnv,
-  input: { metadata: Record<string, string>; productId?: string },
+  // userId is the Whop user the lead is for. The Leads API requires a real
+  // Whop user id: an anonymous visitor has none, so the estimate form must
+  // send the signed-in visitor's id (see the /api/leads route).
+  input: {
+    userId: string;
+    metadata: Record<string, string>;
+    productId?: string;
+  },
 ): Promise<{ id: string }> {
   const { body } = await whopFetch(env, "/leads", {
     method: "POST",
     idempotencyKey: idempotencyKey(),
     body: {
       account_id: env.accountId,
+      user_id: input.userId,
       metadata: input.metadata,
       product_id: input.productId ?? undefined,
     },
@@ -201,7 +249,9 @@ export async function createInvoice(
 ): Promise<{ id: string; status: string; checkoutLink: string | null }> {
   const dueAt =
     input.dueInDays !== undefined
-      ? new Date(Date.now() + input.dueInDays * 24 * 60 * 60 * 1000).toISOString()
+      ? new Date(
+          Date.now() + input.dueInDays * 24 * 60 * 60 * 1000,
+        ).toISOString()
       : undefined;
   const inlinePlan: Record<string, unknown> = {
     plan_type: "one_time",
@@ -225,7 +275,8 @@ export async function createInvoice(
   return {
     id: String(body.id ?? ""),
     status: String(body.status ?? ""),
-    checkoutLink: typeof body.checkout_link === "string" ? body.checkout_link : null,
+    checkoutLink:
+      typeof body.checkout_link === "string" ? body.checkout_link : null,
   };
 }
 
@@ -241,7 +292,8 @@ export async function issueInvoice(
   return {
     id: String(body.id ?? invoiceId),
     status: String(body.status ?? ""),
-    checkoutLink: typeof body.checkout_link === "string" ? body.checkout_link : null,
+    checkoutLink:
+      typeof body.checkout_link === "string" ? body.checkout_link : null,
   };
 }
 
@@ -257,6 +309,7 @@ export async function sendInvoice(
   return {
     id: String(body.id ?? invoiceId),
     status: String(body.status ?? ""),
-    checkoutLink: typeof body.checkout_link === "string" ? body.checkout_link : null,
+    checkoutLink:
+      typeof body.checkout_link === "string" ? body.checkout_link : null,
   };
 }

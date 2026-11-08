@@ -84,7 +84,7 @@ export const siteConfig = {
       ],
       startingAt: 249,
       priceNote: "typical minor repair",
-      planId: "plan_REPLACE_WITH_REPAIR",
+      planId: "plan_fDYKh66rRmmFY",
       icon: "repair",
     },
     {
@@ -102,7 +102,7 @@ export const siteConfig = {
       ],
       startingAt: 8900,
       priceNote: "typical 1,500 sq ft home",
-      planId: "plan_REPLACE_WITH_REPLACEMENT",
+      planId: "plan_DNkbcr6IIYb2A",
       icon: "replacement",
     },
     {
@@ -120,7 +120,7 @@ export const siteConfig = {
       ],
       startingAt: 149,
       priceNote: "one-time, per visit",
-      planId: "plan_REPLACE_WITH_INSPECTION",
+      planId: "plan_fLhCQc05Kucpa",
       icon: "inspection",
     },
   ] as Service[],
@@ -133,7 +133,7 @@ export const siteConfig = {
       amount: 149,
       kind: "one_time",
       blurb: "47-point inspection with a photo report. Credited toward any booked job.",
-      planId: "plan_REPLACE_WITH_INSPECTION",
+      planId: "plan_fLhCQc05Kucpa",
     },
     deposit: {
       id: "deposit",
@@ -142,7 +142,7 @@ export const siteConfig = {
       kind: "deposit",
       blurb:
         "Locks your start date and materials. Your card is saved on file so the final balance can be billed when the job is done.",
-      planId: "plan_REPLACE_WITH_DEPOSIT",
+      planId: "plan_yD4ILuix4Wy1Y",
     },
     gutterCleaning: {
       id: "gutter-cleaning",
@@ -150,7 +150,7 @@ export const siteConfig = {
       amount: 199,
       kind: "flat_rate",
       blurb: "Full gutter & downspout cleaning for a single-storey home. Flat rate, no surprises.",
-      planId: "plan_REPLACE_WITH_GUTTER",
+      planId: "plan_2fuxUC3gr2n0i",
     },
   } as Record<string, Plan>,
 

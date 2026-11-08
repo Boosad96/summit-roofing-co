@@ -1,3 +1,5 @@
+import { getWhopUserId } from "./tracking";
+
 /**
  * Client-side helpers for the template's own server API routes.
  * The browser never talks to Whop directly and never sees the API key —
@@ -27,10 +29,17 @@ export interface LeadInput {
   service: string;
   message?: string;
   address?: string;
+  /** Whop user id of the signed-in visitor, when the runtime provides one. */
+  userId?: string;
 }
 
 export function submitLead(input: LeadInput) {
-  return post<{ leadId?: string }>("/api/leads", input);
+  return post<{ leadId?: string }>("/api/leads", {
+    ...input,
+    // Attach the signed-in visitor's Whop user id when the runtime provides
+    // one; the server falls back to WHOP_LEAD_USER_ID for anonymous visitors.
+    userId: input.userId ?? getWhopUserId(),
+  });
 }
 
 export interface CheckoutSession {
@@ -40,7 +49,10 @@ export interface CheckoutSession {
 }
 
 export function createCheckoutSession(planId: string) {
-  return post<CheckoutSession>("/api/checkout/session", { planId, mode: "payment" });
+  return post<CheckoutSession>("/api/checkout/session", {
+    planId,
+    mode: "payment",
+  });
 }
 
 export interface SetupIntentResult {
@@ -51,7 +63,10 @@ export interface SetupIntentResult {
 }
 
 export function createSetupIntent(confirmationToken: string, email: string) {
-  return post<SetupIntentResult>("/api/save-payment-method", { confirmationToken, email });
+  return post<SetupIntentResult>("/api/save-payment-method", {
+    confirmationToken,
+    email,
+  });
 }
 
 export interface InvoiceResult {

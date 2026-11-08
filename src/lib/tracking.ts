@@ -23,8 +23,27 @@ declare global {
   interface Window {
     whop?: {
       track: (event: string, data?: Record<string, unknown>) => void;
+      // The Whop Websites runtime may expose the signed-in visitor here.
+      // These are deliberately loose: the runtime is not part of the
+      // template and may not provide an identity at all (anonymous visitors).
+      user?: { id?: string };
+      viewer?: { id?: string };
+      userId?: string;
     };
   }
+}
+
+/**
+ * The Whop user id of the signed-in visitor, when the Whop Websites runtime
+ * exposes one. Returns undefined for anonymous visitors (the server then
+ * records the lead against the configured WHOP_LEAD_USER_ID).
+ */
+export function getWhopUserId(): string | undefined {
+  if (typeof window === "undefined") return undefined;
+  const whop = window.whop;
+  if (!whop) return undefined;
+  const id = whop.user?.id ?? whop.viewer?.id ?? whop.userId;
+  return typeof id === "string" && id ? id : undefined;
 }
 
 export type TrackData = {
@@ -59,5 +78,9 @@ export function trackEstimateRequested(service: string): void {
 /** Fired when the deposit checkout is opened. */
 export function trackDepositStarted(planId?: string): void {
   track("deposit_started", { value: 500, currency: "usd", variant_id: planId });
-  track("initiate_checkout", { value: 500, currency: "usd", variant_id: planId });
+  track("initiate_checkout", {
+    value: 500,
+    currency: "usd",
+    variant_id: planId,
+  });
 }

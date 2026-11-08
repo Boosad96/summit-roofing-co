@@ -234,3 +234,20 @@ events alongside; financing options surface automatically at checkout for
 approved customers (Klarna, Splitit, Afterpay, etc.). All code is original;
 company, services and prices are driven by a single config file so the
 template is reusable without structural changes.
+
+## Deployment note - WHOP_API_KEY is reserved
+
+The Whop CLI refuses WHOP_API_KEY as an app secret (reserved by the Whop runtime) because the hosted runtime injects the apps own key. The server reads WHOP_API_KEY_OVERRIDE first when it is set, falling back to WHOP_API_KEY, so a deployed site can be pointed at the sandbox API: set WHOP_API_KEY_OVERRIDE to the sandbox key and WHOP_API_BASE to https://sandbox-api.whop.com/api/v1. Locally, set WHOP_API_KEY in .env as usual.
+The same applies to WHOP_ACCOUNT_ID, which is also reserved: set WHOP_ACCOUNT_ID_OVERRIDE to the sandbox business id.
+
+
+## Deployment note — live verification, 8 November 2026
+
+- Live template: https://summit-roofing-atx.whop.site/ (app `app_EZ1DvK6PuLfI2J`, build `apbu_bsgvxgf2t7Hbq`). The similarly named `summit-roofing-co.whop.site` is a different Colorado roofing company and is not this template.
+- The server is a Cloudflare Worker entry (`src/server/index.ts`, `export default { fetch }`; ESM `dist/server/index.js`), not Express. Static assets are served through `env.ASSETS`; `/api/*` runs in the Worker first.
+- Live API routes use `/api/health` and `/api/config`; there is no `/api/status` route. Health returns `demo: false` against the sandbox API when the sandbox overrides are set.
+- Checkout configurations must send `variant_id`, not `plan_id`; sending `plan_id` returns 404 “Variant not found”.
+- `POST /leads` requires a real Whop `user_id`. The server uses the signed-in visitor’s id when available, otherwise the configured `WHOP_LEAD_USER_ID` fallback.
+- The embedded Whop Checkout/Payment Elements are served from Whop’s production CDN and cannot load a checkout configuration or setup intent created against the sandbox API. In test mode the deposit page therefore links to Whop’s hosted sandbox checkout (`purchaseUrl`) instead of mounting the embedded Checkout element. Card saving/setup-intent loading was not verified in sandbox for the same reason.
+- Verified live on 8 November 2026: homepage and API (`/api/health`, `/api/config`) return live sandbox values; estimate form returned a lead reference; $500 Project Deposit sandbox test checkout succeeded (`pay_DidPpaERm42OTa`, total $590.00 including $90.00 estimated tax from the dummy India billing address used for the test); final-balance draft invoices exist in the sandbox dashboard (#00000002, $8,400, `pay_XEv3TxIvWNZt86`). Invoice Send/Issue is blocked in this sandbox by an account-verification gate; no bank, payout or tax details were entered.
+- Pixel dashboard (Pin Skills Studio → Websites → `summit-roofing-atx.whop.site`, Nov 2–8): `service_viewed` 18, `deposit_started` 9, `estimate_requested` 1, plus `lead` 1.
